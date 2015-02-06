@@ -43,7 +43,7 @@ object Build extends sbt.Build {
   val uPickleVersion = "0.2.5"
   
   val scalaVersionMajor = "scala-2.11"
-  val scalaVersionNumber = "2.11.4"
+  val scalaVersionNumber = "2.11.5"
   val sprayVersion = "1.3.2"
   val sprayJsonVersion = "1.3.1"
   val scalaTestVersion = "2.2.0"
