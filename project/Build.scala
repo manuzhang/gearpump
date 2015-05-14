@@ -75,7 +75,7 @@ object Build extends sbt.Build {
       useGpg := false,
       pgpSecretRing := file("./secring.asc"),
       pgpPublicRing := file("./pubring.asc"),
-      scalacOptions ++= Seq("-Yclosure-elim","-Yinline"),
+      scalacOptions ++= Seq("-Yclosure-elim","-Yinline","-Xlint","-deprecation","-Xfatal-warnings"),
       publishMavenStyle := true,
 
       pgpPassphrase := Option(System.getenv().get("PASSPHRASE")).map(_.toArray),
