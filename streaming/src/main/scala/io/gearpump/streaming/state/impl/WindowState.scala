@@ -19,26 +19,20 @@
 package io.gearpump.streaming.state.impl
 
 import io.gearpump.TimeStamp
-import io.gearpump.streaming.state.api.{Group, Serializer, MonoidState}
-import io.gearpump.streaming.task.TaskContext
+import io.gearpump.streaming.state.api.{Group, MonoidState, Serializer}
 import io.gearpump.streaming.state.impl.WindowState._
+import io.gearpump.streaming.task.TaskContext
+import io.gearpump.streaming.windowing.{CheckpointAlignedWindow, Interval}
 import io.gearpump.util.LogUtil
 import org.slf4j.Logger
 
 import scala.collection.immutable.TreeMap
 
-/**
- * an interval is a dynamic time range that is divided by window boundary and checkpoint time
- */
-case class Interval(startTime: TimeStamp, endTime: TimeStamp) extends Ordered[Interval] {
-  override def compare(that: Interval): Int = {
-    if (startTime < that.startTime) -1
-    else if (startTime > that.startTime) 1
-    else 0
-  }
-}
+
 
 object WindowState {
+  val WINDOW = "window"
+
   val LOG: Logger = LogUtil.getLogger(classOf[WindowState[_]])
 }
 
@@ -53,7 +47,7 @@ object WindowState {
 class WindowState[T](group: Group[T],
                      serializer: Serializer[TreeMap[Interval, T]],
                      taskContext: TaskContext,
-                     window: Window)
+                     window: CheckpointAlignedWindow)
   extends MonoidState[T](group) {
   /**
    * each interval has a state updated by message with timestamp in
@@ -114,38 +108,9 @@ class WindowState[T](group: Group[T],
     serializer.serialize(states)
   }
 
-  /**
-   * each message will update state in corresponding Interval[StartTime, endTime),
-   * which is decided by the message's timestamp t where
-   *    startTime = Math.max(lowerBound1, lowerBound2, checkpointTime)
-   *    endTime = Math.min(upperBound1, upperBound2, checkpointTime)
-   *    lowerBound1 = step * Nmax1 <= t
-   *    lowerBound2 = step * Nmax2 + size <= t
-   *    upperBound1 = step * Nmin1 > t
-   *    upperBound2 = step * Nmin2 + size > t
-   */
-  private[impl] def getInterval(timestamp: TimeStamp, checkpointTime: TimeStamp): Interval = {
-    val windowSize = window.windowSize
-    val windowStep = window.windowStep
-    val lowerBound1 = timestamp / windowStep * windowStep
-    val lowerBound2 =
-      if (timestamp < windowSize) 0L
-      else (timestamp - windowSize) / windowStep * windowStep + windowSize
-    val upperBound1 = (timestamp / windowStep + 1) * windowStep
-    val upperBound2 =
-      if (timestamp < windowSize) windowSize
-      else ((timestamp - windowSize) / windowStep + 1) * windowStep + windowSize
-    val lowerBound = Math.max(lowerBound1, lowerBound2)
-    val upperBound = Math.min(upperBound1, upperBound2)
-    if (checkpointTime > timestamp) {
-      Interval(Math.max(lowerBound, lastCheckpointTime), Math.min(upperBound, checkpointTime))
-    } else {
-      Interval(Math.max(lowerBound, checkpointTime), upperBound)
-    }
-  }
 
   private[impl] def updateIntervalStates(timestamp: TimeStamp, t: T, checkpointTime: TimeStamp): Unit = {
-    val interval = getInterval(timestamp, checkpointTime)
+    val interval = window.getInterval(timestamp, lastCheckpointTime, checkpointTime)
     intervalStates.get(interval) match {
       case Some(st) =>
         intervalStates += interval -> group.plus(st, t)

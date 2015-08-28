@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.gearpump.streaming.state.impl
+package io.gearpump.streaming.windowing
 
 import io.gearpump.TimeStamp
 
@@ -23,11 +23,7 @@ import io.gearpump.TimeStamp
  * used in window applications
  * it keeps the current window and slide ahead when the window expires
  */
-class Window(val windowSize: Long, val windowStep: Long) {
-
-  def this(windowConfig: WindowConfig) = {
-    this(windowConfig.windowSize, windowConfig.windowStep)
-  }
+class AlignedWindow(val windowSize: Long, val slidePeriod: Long) extends Window {
 
   private var clock: TimeStamp = 0L
   private var startTime = 0L
@@ -37,11 +33,11 @@ class Window(val windowSize: Long, val windowStep: Long) {
   }
 
   def slideOneStep(): Unit = {
-    startTime += windowStep
+    startTime += slidePeriod
   }
 
   def slideTo(timestamp: TimeStamp): Unit = {
-    startTime = timestamp / windowStep * windowStep
+    startTime = timestamp / slidePeriod * slidePeriod
   }
 
   def shouldSlide: Boolean = {
@@ -51,4 +47,24 @@ class Window(val windowSize: Long, val windowStep: Long) {
   def range: (TimeStamp, TimeStamp) = {
     startTime -> (startTime + windowSize)
   }
+  /**
+   * each message will update state in corresponding Interval[startTime, endTime),
+   * which is decided by the message's timestamp where
+   *   startTime = Math.max(startTimeOfCurrentWindow, endTimeOfPreviousWindow)
+   *   endTime = Math.min(endTimeOfCurrentWindow, startTimeOfNextWindow)
+   */
+  def getInterval(timestamp: TimeStamp): Interval = {
+    val curStart = timestamp / slidePeriod * slidePeriod
+    val prevEnd =
+      if (timestamp < windowSize) 0L
+      else (timestamp - windowSize) / slidePeriod * slidePeriod + windowSize
+    val nextStart = (timestamp / slidePeriod + 1) * slidePeriod
+    val curEnd =
+      if (timestamp < windowSize) windowSize
+      else ((timestamp - windowSize) / slidePeriod + 1) * slidePeriod + windowSize
+    val start = Math.max(curStart, prevEnd)
+    val end = Math.min(curEnd, nextStart)
+    Interval(start, end)
+  }
+
 }

@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,10 +16,17 @@
  * limitations under the License.
  */
 
-package io.gearpump.streaming.state.impl
+package io.gearpump.streaming.windowing
 
-object WindowConfig {
-  val NAME = "window_config"
+import io.gearpump.TimeStamp
+
+/**
+ * an interval is a dynamic time range that is divided by window boundary and checkpoint time
+ */
+case class Interval(startTime: TimeStamp, endTime: TimeStamp) extends Ordered[Interval] {
+  override def compare(that: Interval): Int = {
+    if (startTime < that.startTime) -1
+    else if (startTime > that.startTime) 1
+    else 0
+  }
 }
-
-case class WindowConfig(windowSize: Long, windowStep: Long)

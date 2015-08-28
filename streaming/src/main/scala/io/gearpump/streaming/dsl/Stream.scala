@@ -21,8 +21,9 @@ package io.gearpump.streaming.dsl
 import io.gearpump.streaming.dsl.op._
 import io.gearpump.streaming.sink.DataSink
 import io.gearpump.streaming.task.Task
-import io.gearpump.util.{Graph, LogUtil}
-import org.slf4j.{Logger, LoggerFactory}
+import io.gearpump.streaming.windowing.AlignedWindow
+import io.gearpump.util.Graph
+import org.slf4j.LoggerFactory
 
 import scala.reflect.ClassTag
 
@@ -111,30 +112,40 @@ class Stream[T:ClassTag](private val graph: Graph[Op,OpEdge], private val thisNo
    * Stream[People].groupBy(_.gender).flatmap(..).filter.(..).reduce(..)
    *
    * @param fun
-   * @param parallism
+   * @param parallelism
    * @tparam Group
    * @return
    */
-  def groupBy[Group](fun: T => Group, parallism: Int = 1, description: String = null): Stream[T] = {
-    val groupOp = GroupByOp(fun, parallism, Option(description).getOrElse("groupBy"))
+  def groupBy[Group](fun: T => Group, parallelism: Int = 1, description: String = null): Stream[T] = {
+    val groupOp = GroupByOp(fun, parallelism, Option(description).getOrElse("groupBy"))
     graph.addVertex(groupOp)
     graph.addEdge(thisNode, edge.getOrElse(Shuffle), groupOp)
     new Stream[T](graph, groupOp)
   }
 
+  def window(windowSize: Long, slidePeriod: Long, parallelism: Int = 1, description: String = null): Stream[T] = {
+    val window = new AlignedWindow(windowSize, slidePeriod)
+    val windowOp = WindowOp(window, parallelism, Option(description).getOrElse("window"))
+    graph.addVertex(windowOp)
+    graph.addEdge(thisNode, edge.getOrElse(Shuffle), windowOp)
+    new Stream[T](graph, windowOp)
+  }
+
   /**
    * connect with a low level Processor(TaskDescription)
    * @param processor
-   * @param parallism
+   * @param parallelism
    * @tparam R
    * @return
    */
-  def process[R: ClassTag](processor: Class[_ <: Task], parallism: Int, description: String = null): Stream[R] = {
-    val processorOp = ProcessorOp(processor, parallism, Option(description).getOrElse("process"))
+  def process[R: ClassTag](processor: Class[_ <: Task], parallelism: Int, description: String = null): Stream[R] = {
+    val processorOp = ProcessorOp(processor, parallelism, Option(description).getOrElse("process"))
     graph.addVertex(processorOp)
     graph.addEdge(thisNode, edge.getOrElse(Shuffle), processorOp)
     new Stream[R](graph, processorOp, Some(Shuffle))
   }
+
+
 
 }
 
@@ -145,8 +156,8 @@ class KVStream[K, V](stream: Stream[Tuple2[K, V]]){
    * For (key, value) will groupby key
    * @return
    */
-  def groupByKey(parallism: Int = 1): Stream[Tuple2[K, V]] = {
-    stream.groupBy(Stream.getTupleKey[K, V], parallism, "groupByKey")
+  def groupByKey(parallelism: Int = 1): Stream[Tuple2[K, V]] = {
+    stream.groupBy(Stream.getTupleKey[K, V], parallelism, "groupByKey")
   }
 
 
@@ -176,8 +187,8 @@ object Stream {
   implicit def streamToKVStream[K, V](stream: Stream[Tuple2[K, V]]): KVStream[K, V] = new KVStream(stream)
 
   implicit class Sink[T: ClassTag](stream: Stream[T]) extends java.io.Serializable {
-    def sink[T: ClassTag](dataSink: TypedDataSink[T], parallism: Int, description: String): Stream[T] = {
-      implicit val sink = DataSinkOp(dataSink, parallism, Some(description).getOrElse("traversable"))
+    def sink[T: ClassTag](dataSink: TypedDataSink[T], parallelism: Int, description: String): Stream[T] = {
+      implicit val sink = DataSinkOp(dataSink, parallelism, Some(description).getOrElse("traversable"))
       stream.graph.addVertex(sink)
       stream.graph.addEdge(stream.thisNode, Shuffle, sink)
       new Stream[T](stream.graph, sink)

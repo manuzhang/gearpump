@@ -22,13 +22,14 @@ import akka.actor.ActorSystem
 import akka.testkit.TestProbe
 import com.twitter.algebird.AveragedValue
 import io.gearpump.streaming.MockUtil
-import io.gearpump.streaming.state.impl.{InMemoryCheckpointStoreFactory, WindowConfig, PersistentStateConfig}
+import io.gearpump.streaming.state.impl.{InMemoryCheckpointStoreFactory, PersistentStateConfig}
 import io.gearpump.streaming.task.{StartTime, ReportCheckpointClock}
 import io.gearpump.streaming.transaction.api.CheckpointStoreFactory
 import io.gearpump.Message
 import io.gearpump.cluster.UserConfig
 import io.gearpump.streaming.state.impl.InMemoryCheckpointStoreFactory
 import io.gearpump.streaming.task.StartTime
+import io.gearpump.streaming.windowing.WindowConfig
 import org.mockito.Mockito._
 import org.scalacheck.Gen
 import org.scalatest.{Matchers, PropSpec}

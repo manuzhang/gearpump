@@ -22,10 +22,11 @@ import com.twitter.algebird.{AveragedGroup, AveragedValue}
 import io.gearpump.streaming.monoid.AlgebirdGroup
 import io.gearpump.streaming.serializer.ChillSerializer
 import io.gearpump.streaming.state.api.{PersistentTask, PersistentState}
-import io.gearpump.streaming.state.impl.{WindowConfig, WindowState, Interval, Window}
+import io.gearpump.streaming.state.impl.WindowState
 import io.gearpump.streaming.task.TaskContext
 import io.gearpump.Message
 import io.gearpump.cluster.UserConfig
+import io.gearpump.streaming.windowing._
 import io.gearpump.util.LogUtil
 import org.slf4j.Logger
 
@@ -41,7 +42,7 @@ class WindowAverageProcessor(taskContext : TaskContext, conf: UserConfig)
   override def persistentState: PersistentState[AveragedValue] = {
     val group = new AlgebirdGroup(AveragedGroup)
     val serializer = new ChillSerializer[TreeMap[Interval, AveragedValue]]
-    val window = new Window(conf.getValue[WindowConfig](WindowConfig.NAME).get)
+    val window = conf.getValue[Window](WindowState.WINDOW).get.asInstanceOf[CheckpointAlignedWindow]
     new WindowState[AveragedValue](group, serializer, taskContext, window)
   }
 

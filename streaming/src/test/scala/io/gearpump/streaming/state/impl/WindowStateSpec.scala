@@ -21,6 +21,7 @@ package io.gearpump.streaming.state.impl
 import io.gearpump._
 import io.gearpump.streaming.MockUtil
 import io.gearpump.streaming.state.api.{Serializer, Group}
+import io.gearpump.streaming.windowing.AlignedWindow
 import org.mockito.Mockito._
 import org.scalacheck.Gen
 import org.scalatest.mock.MockitoSugar
@@ -42,7 +43,7 @@ class WindowStateSpec extends PropSpec with PropertyChecks with Matchers with Mo
   property("WindowState init should recover checkpointed state") {
     forAll(intervalGen) {
       (interval: Interval) =>
-        val window = mock[Window]
+        val window = mock[AlignedWindow]
         val taskContext = MockUtil.mockTaskContext
         val group = mock[Group[AnyRef]]
         val serializer = mock[Serializer[TreeMap[Interval, AnyRef]]]
@@ -74,7 +75,7 @@ class WindowStateSpec extends PropSpec with PropertyChecks with Matchers with Mo
 
   property("WindowState checkpoints") {
     forAll(longGen) { (checkpointTime: TimeStamp) =>
-      val window = mock[Window]
+      val window = mock[AlignedWindow]
       val taskContext = MockUtil.mockTaskContext
       val group = mock[Group[AnyRef]]
       val serializer = mock[Serializer[TreeMap[Interval, AnyRef]]]
@@ -98,7 +99,7 @@ class WindowStateSpec extends PropSpec with PropertyChecks with Matchers with Mo
 
       when(window.range).thenReturn((start, end))
       when(window.windowSize).thenReturn(size)
-      when(window.windowStep).thenReturn(step)
+      when(window.slidePeriod).thenReturn(step)
       when(group.zero).thenReturn(zero, zero)
       when(group.plus(zero, left)).thenReturn(left, Nil: _*)
       when(group.plus(zero, right)).thenReturn(right, Nil: _*)
@@ -120,7 +121,7 @@ class WindowStateSpec extends PropSpec with PropertyChecks with Matchers with Mo
 
   property("WindowState updates state") {
     forAll(longGen) { (checkpointTime: TimeStamp) =>
-      val window = mock[Window]
+      val window = mock[AlignedWindow]
       val taskContext = MockUtil.mockTaskContext
       val group = mock[Group[AnyRef]]
       val serializer = mock[Serializer[TreeMap[Interval, AnyRef]]]
@@ -141,7 +142,7 @@ class WindowStateSpec extends PropSpec with PropertyChecks with Matchers with Mo
 
       when(window.range).thenReturn((start, end))
       when(window.windowSize).thenReturn(size)
-      when(window.windowStep).thenReturn(step)
+      when(window.slidePeriod).thenReturn(step)
       when(window.shouldSlide).thenReturn(false)
       when(group.plus(zero, left)).thenReturn(left, left)
       when(group.plus(left, zero)).thenReturn(left, Nil: _*)
@@ -160,7 +161,7 @@ class WindowStateSpec extends PropSpec with PropertyChecks with Matchers with Mo
 
       when(window.range).thenReturn((start, end))
       when(window.windowSize).thenReturn(size)
-      when(window.windowStep).thenReturn(step)
+      when(window.slidePeriod).thenReturn(step)
       when(window.shouldSlide).thenReturn(false)
       when(group.plus(zero, right)).thenReturn(right, right)
       when(group.plus(left, right)).thenReturn(plus, Nil: _*)
@@ -206,8 +207,8 @@ class WindowStateSpec extends PropSpec with PropertyChecks with Matchers with Mo
 
   property("WindowState gets interval for timestamp") {
     forAll(longGen, longGen, longGen, longGen) {
-      (timestamp: TimeStamp, checkpointTime: TimeStamp, windowSize: Long, windowStep: Long) =>
-        val windowManager = new Window(windowSize, windowStep)
+      (timestamp: TimeStamp, checkpointTime: TimeStamp, windowSize: Long, slidePeriod: Long) =>
+        val windowManager = new AlignedWindow(windowSize, slidePeriod)
         val taskContext = MockUtil.mockTaskContext
         val group = mock[Group[AnyRef]]
         val serializer = mock[Serializer[TreeMap[Interval, AnyRef]]]
@@ -217,22 +218,22 @@ class WindowStateSpec extends PropSpec with PropertyChecks with Matchers with Mo
         val state = new WindowState[AnyRef](group, serializer, taskContext, windowManager)
 
         val interval = state.getInterval(timestamp, checkpointTime)
-        intervalSpec(interval, timestamp, checkpointTime, windowSize, windowStep)
+        intervalSpec(interval, timestamp, checkpointTime, windowSize, slidePeriod)
 
         val nextTimeStamp = interval.endTime
         val nextInterval = state.getInterval(nextTimeStamp, checkpointTime)
-        intervalSpec(nextInterval, nextTimeStamp, checkpointTime, windowSize, windowStep)
+        intervalSpec(nextInterval, nextTimeStamp, checkpointTime, windowSize, slidePeriod)
 
         interval.endTime shouldBe nextInterval.startTime
     }
 
     def intervalSpec(interval: Interval, timestamp: TimeStamp,
-        checkpointTime: TimeStamp, windowSize: Long, windowStep: Long): Unit = {
+        checkpointTime: TimeStamp, windowSize: Long, slidePeriod: Long): Unit = {
       interval.startTime should be <= interval.endTime
-      timestamp / windowStep * windowStep should (be <= interval.startTime)
-      (timestamp - windowSize) / windowStep * windowStep should (be <= interval.startTime)
-      (timestamp / windowStep + 1) * windowStep should (be >= interval.endTime)
-      ((timestamp - windowSize) / windowStep + 1) * windowStep + windowSize should (be >= interval.endTime)
+      timestamp / slidePeriod * slidePeriod should (be <= interval.startTime)
+      (timestamp - windowSize) / slidePeriod * slidePeriod should (be <= interval.startTime)
+      (timestamp / slidePeriod + 1) * slidePeriod should (be >= interval.endTime)
+      ((timestamp - windowSize) / slidePeriod + 1) * slidePeriod + windowSize should (be >= interval.endTime)
       checkpointTime should (be <= interval.startTime or be >= interval.endTime)
     }
   }

@@ -48,7 +48,7 @@ object BuildExample extends sbt.Build {
   lazy val transport = Project(
     id = "gearpump-examples-transport",
     base = file("examples/streaming/transport"),
-    settings = commonSettings ++ noPublish ++ 
+    settings = commonSettings ++ noPublish ++ myAssemblySettings ++
         Seq(
           libraryDependencies ++= Seq(
             "io.spray" %%  "spray-can"       % sprayVersion,

@@ -20,6 +20,7 @@ package io.gearpump.streaming.dsl.op
 
 import io.gearpump.streaming.dsl.{TypedDataSource, TypedDataSink}
 import io.gearpump.streaming.task.Task
+import io.gearpump.streaming.windowing.Window
 
 import scala.reflect.ClassTag
 
@@ -48,6 +49,8 @@ trait ParameterizedOp[T] extends MasterOp
 case class MergeOp(source: Op, target: Op, description: String) extends MasterOp
 
 case class GroupByOp[T: ClassTag, R](fun: T => R, parallism: Int, description: String) extends ParameterizedOp[T]
+
+case class WindowOp[T: ClassTag](window: Window, parallelism: Int, description: String) extends ParameterizedOp[T]
 
 case class ProcessorOp[T <: Task: ClassTag](processor: Class[T], parallism: Int, description: String) extends ParameterizedOp[T]
 

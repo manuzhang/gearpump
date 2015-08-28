@@ -19,10 +19,11 @@
 package io.gearpump.streaming.examples.state
 
 import akka.actor.ActorSystem
-import io.gearpump.streaming.{StreamApplication, Processor}
+import io.gearpump.streaming.{Processor, StreamApplication}
+import io.gearpump.streaming.windowing.CheckpointAlignedWindow
 import io.gearpump.streaming.examples.state.processor.{WindowAverageProcessor, NumberGeneratorProcessor}
 import io.gearpump.streaming.hadoop.HadoopCheckpointStoreFactory
-import io.gearpump.streaming.state.impl.{WindowConfig, PersistentStateConfig}
+import io.gearpump.streaming.state.impl.{WindowState, PersistentStateConfig}
 import io.gearpump.cluster.UserConfig
 import io.gearpump.cluster.client.ClientContext
 import io.gearpump.cluster.main.{ArgumentsParser, CLIOption, ParseResult}
@@ -48,7 +49,7 @@ object WindowAverageApp extends AkkaApp with ArgumentsParser {
         .withBoolean(PersistentStateConfig.STATE_CHECKPOINT_ENABLE, true)
         .withLong(PersistentStateConfig.STATE_CHECKPOINT_INTERVAL_MS, 1000L)
         .withValue(PersistentStateConfig.STATE_CHECKPOINT_STORE_FACTORY, checkpointStoreFactory)
-        .withValue(WindowConfig.NAME, WindowConfig(windowSize, windowStep))
+        .withValue(WindowState.WINDOW, new CheckpointAlignedWindow(windowSize, windowStep))
     val gen = Processor[NumberGeneratorProcessor](config.getInt("gen"))
     val count = Processor[WindowAverageProcessor](config.getInt("window"), taskConf = taskConfig)
     val partitioner = new HashPartitioner()

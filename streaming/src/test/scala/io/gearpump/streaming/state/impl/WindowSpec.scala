@@ -19,6 +19,7 @@
 package io.gearpump.streaming.state.impl
 
 import io.gearpump.TimeStamp
+import io.gearpump.streaming.windowing.AlignedWindow
 import org.scalacheck.Gen
 import org.scalatest.mock.MockitoSugar
 import org.scalatest.{Matchers, PropSpec}
@@ -27,12 +28,12 @@ import org.scalatest.prop.PropertyChecks
 class WindowSpec extends PropSpec with PropertyChecks with Matchers with MockitoSugar {
 
   val windowSizeGen = Gen.chooseNum[Long](1L, 1000L)
-  val windowStepGen = Gen.chooseNum[Long](1L, 1000L)
+  val slidePeriodGen = Gen.chooseNum[Long](1L, 1000L)
   val timestampGen = Gen.chooseNum[Long](0L, 1000L)
   property("Window should only slide when time passes window end") {
-    forAll(timestampGen, windowSizeGen, windowStepGen) {
-      (timestamp: TimeStamp, windowSize: Long, windowStep: Long) =>
-        val window = new Window(windowSize, windowStep)
+    forAll(timestampGen, windowSizeGen, slidePeriodGen) {
+      (timestamp: TimeStamp, windowSize: Long, slidePeriod: Long) =>
+        val window = new AlignedWindow(windowSize, slidePeriod)
         window.shouldSlide shouldBe false
         window.update(timestamp)
         window.shouldSlide shouldBe timestamp >= windowSize
@@ -40,18 +41,18 @@ class WindowSpec extends PropSpec with PropertyChecks with Matchers with Mockito
   }
 
   property("Window should slide by one or to given timestamp") {
-    forAll(timestampGen, windowSizeGen, windowStepGen) {
-      (timestamp: TimeStamp, windowSize: Long, windowStep: Long) =>
-        val window = new Window(windowSize, windowStep)
+    forAll(timestampGen, windowSizeGen, slidePeriodGen) {
+      (timestamp: TimeStamp, windowSize: Long, slidePeriod: Long) =>
+        val window = new AlignedWindow(windowSize, slidePeriod)
         window.range shouldBe (0L, windowSize)
 
         window.slideOneStep()
-        window.range shouldBe (windowStep, windowSize + windowStep)
+        window.range shouldBe (slidePeriod, windowSize + slidePeriod)
 
         window.slideTo(timestamp)
         val (startTime, endTime) = window.range
-        if (windowStep > windowSize) {
-          timestamp should (be >= startTime and be < (startTime + windowStep))
+        if (slidePeriod > windowSize) {
+          timestamp should (be >= startTime and be < (startTime + slidePeriod))
         } else {
           timestamp should (be >= startTime and be < endTime)
         }
