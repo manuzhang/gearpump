@@ -116,6 +116,8 @@ private[storm] class GearpumpStormTopology(
     allConfig.putAll(appConfig)
     allConfig.putAll(getMergedComponentConfig(componentConfigs, allConfig.toMap))
     allConfig.put(Config.TOPOLOGY_NAME, name)
+    // disable zookeeper authentication
+    allConfig.remove(Config.STORM_ZOOKEEPER_TOPOLOGY_AUTH_SCHEME)
     allConfig
   }
 

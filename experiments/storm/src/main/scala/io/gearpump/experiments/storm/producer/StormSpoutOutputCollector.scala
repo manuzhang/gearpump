@@ -32,6 +32,7 @@ case class PendingMessage(id: Object, messageTime: TimeStamp, startTime: TimeSta
 private[storm] class StormSpoutOutputCollector(
     collector: StormOutputCollector, spout: ISpout, ackEnabled: Boolean) extends ISpoutOutputCollector {
 
+  private val trident = true
   private var checkpointClock = 0L
   private var pendingMessage: Option[PendingMessage] = None
   private var nextPendingMessage: Option[PendingMessage] = None
@@ -58,11 +59,21 @@ private[storm] class StormSpoutOutputCollector(
 
   def ackPendingMessage(checkpointClock: TimeStamp): Unit = {
     this.checkpointClock = checkpointClock
-    nextPendingMessage.foreach { case PendingMessage(_, messageTime, _) =>
-      if (messageTime <= this.checkpointClock) {
-        pendingMessage.foreach { case PendingMessage(id, _, _) =>
-          spout.ack(id)
+    if (trident) {
+      pendingMessage.foreach { case PendingMessage(id, messageTime, _) =>
+        if (messageTime <= this.checkpointClock) {
           reset
+          spout.ack(id)
+        }
+
+      }
+    } else {
+      nextPendingMessage.foreach { case PendingMessage(_, messageTime, _) =>
+        if (messageTime <= this.checkpointClock) {
+          pendingMessage.foreach { case PendingMessage(id, _, _) =>
+            reset
+            spout.ack(id)
+          }
         }
       }
     }
@@ -71,8 +82,8 @@ private[storm] class StormSpoutOutputCollector(
   def failPendingMessage(timeoutMillis: Long): Unit = {
     pendingMessage.foreach { case PendingMessage(id, _, startTime) =>
       if (System.currentTimeMillis() - startTime >= timeoutMillis) {
-        spout.fail(id)
         reset
+        spout.fail(id)
       }
     }
   }
@@ -85,15 +96,20 @@ private[storm] class StormSpoutOutputCollector(
   private def setPendingOrAck(messageId: Object, startTime: TimeStamp, messageTime: TimeStamp): Unit = {
     if (ackEnabled) {
       val newPendingMessage = PendingMessage(messageId, messageTime, startTime)
-      pendingMessage match {
-        case Some(msg) =>
-          if (nextPendingMessage.isEmpty && msg.messageTime <= this.checkpointClock) {
-            nextPendingMessage = Some(newPendingMessage)
-          } else {
-            spout.ack(messageId)
-          }
-        case None =>
-          pendingMessage = Some(newPendingMessage)
+      if (trident) {
+        pendingMessage = Some(newPendingMessage)
+      } else {
+        pendingMessage match {
+          case None =>
+            pendingMessage = Some(newPendingMessage)
+          case Some(msg) =>
+            if (nextPendingMessage.isEmpty && msg.messageTime <= this.checkpointClock) {
+              nextPendingMessage = Some(newPendingMessage)
+            } else {
+              spout.ack(messageId)
+            }
+
+        }
       }
     } else {
       spout.ack(messageId)
