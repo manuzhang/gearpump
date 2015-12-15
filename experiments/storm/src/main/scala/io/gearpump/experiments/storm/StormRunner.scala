@@ -34,6 +34,8 @@ import io.gearpump.experiments.storm.util.{GraphBuilder, StormConstants}
 import io.gearpump.streaming.StreamApplication
 import io.gearpump.util.{AkkaApp, Constants, LogUtil, Util}
 
+import scopt.OptionParser
+
 import scala.collection.JavaConverters._
 
 object StormRunner extends AkkaApp with ArgumentsParser {
@@ -41,8 +43,6 @@ object StormRunner extends AkkaApp with ArgumentsParser {
     "jar" -> CLIOption[String]("<storm jar>", required = true),
     "config" -> CLIOption[String]("<storm config path>", required = false),
     "verbose" -> CLIOption("<print verbose log on console>", required = false, defaultValue = Some(false)))
-
-  override val remainArgs = Array("topology_name")
 
   override def main(inputAkkaConf: Config, args: Array[String]): Unit = {
 
