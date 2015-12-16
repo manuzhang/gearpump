@@ -77,8 +77,11 @@ abstract class PersistentTask[T](taskContext: TaskContext, conf: UserConfig)
     val upstreamMinClock = taskContext.upstreamMinClock
     if (checkpointManager.shouldCheckpoint(upstreamMinClock)) {
       val serialized = state.checkpoint()
-      checkpointManager.checkpoint(checkpointTime, serialized)
-      reportCheckpointClock(checkpointTime)
+      //checkpointManager.checkpoint(checkpointTime, serialized)
+      implicit val executionContext = taskContext.system.dispatcher
+      checkpointManager.checkpointAsync(checkpointTime, serialized) {
+        reportCheckpointClock(checkpointTime)
+      }
 
       val nextCheckpointTime = checkpointManager.updateCheckpointTime()
       state.setNextCheckpointTime(nextCheckpointTime)

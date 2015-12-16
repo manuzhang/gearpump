@@ -20,10 +20,19 @@ package io.gearpump.streaming.state.impl
 
 import io.gearpump.TimeStamp
 import io.gearpump.streaming.transaction.api.CheckpointStore
+import io.gearpump.util.LogUtil
+import org.slf4j.Logger
 
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
+
+object CheckpointManager {
+  private val LOG: Logger = LogUtil.getLogger(classOf[CheckpointManager])
+}
 
 class CheckpointManager(checkpointInterval: Long,
     checkpointStore: CheckpointStore) {
+  import io.gearpump.streaming.state.impl.CheckpointManager._
 
   private var maxMessageTime = 0L
   private var checkpointTime = checkpointInterval
@@ -37,6 +46,16 @@ class CheckpointManager(checkpointInterval: Long,
   def checkpoint(timestamp: TimeStamp, checkpoint: Array[Byte]): Unit = {
     checkpointStore.persist(timestamp, checkpoint)
     lastCheckpointTime = checkpointTime
+  }
+
+  def checkpointAsync(timestamp: TimeStamp, checkpoint: Array[Byte])(callback: => Unit)
+      (implicit executionContext: ExecutionContext): Unit = {
+    Future {
+      checkpointStore.persist(timestamp, checkpoint)
+    } onComplete {
+      case Success(_) => callback
+      case Failure(t) => LOG.error(s"checkpoint failed", t)
+    }
   }
 
   def update(messageTime: TimeStamp): Unit = {
