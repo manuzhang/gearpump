@@ -9,7 +9,7 @@ object BuildExample extends sbt.Build {
     id = "gearpump-examples",
     base = file("examples"),
     settings = commonSettings ++ noPublish
-  ) aggregate (wordcount, wordcountJava, complexdag, sol, fsio, examples_kafka,
+  ) aggregate (wordcount, wordcountJava, complexdag, sol, fsio, examples_kafka, twitter,
       distributedshell, stockcrawler, transport, examples_state, pagerank, distributeservice)
 
   lazy val wordcountJava = Project(
@@ -185,6 +185,19 @@ object BuildExample extends sbt.Build {
       mainClass in (Compile, packageBin) := Some("io.gearpump.experiments.pagerank.example.PageRankExample"),
       target in assembly := baseDirectory.value.getParentFile.getParentFile / "target" /
         CrossVersion.binaryScalaVersion(scalaVersion.value)
+    )
+  ) dependsOn(streaming % "test->test; provided")
+
+  lazy val twitter = Project(
+    id = "gearpump-examples-twitter",
+    base = file("examples/streaming/twitter"),
+    settings = commonSettings ++ noPublish ++ myAssemblySettings ++ Seq(
+      libraryDependencies ++= Seq(
+        "org.twitter4j" % "twitter4j-stream" % "3.0.3"
+      ),
+      mainClass in (Compile, packageBin) := Some("io.gearpump.streaming.examples.twitter.PrintTwitterStream"),
+      target in assembly := baseDirectory.value.getParentFile.getParentFile / "target" /
+          CrossVersion.binaryScalaVersion(scalaVersion.value)
     )
   ) dependsOn(streaming % "test->test; provided")
 }
