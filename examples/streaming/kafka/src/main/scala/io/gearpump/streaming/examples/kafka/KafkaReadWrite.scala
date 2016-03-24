@@ -25,7 +25,7 @@ import io.gearpump.cluster.UserConfig
 import io.gearpump.cluster.client.ClientContext
 import io.gearpump.cluster.main.{ArgumentsParser, CLIOption, ParseResult}
 import io.gearpump.partitioner.ShufflePartitioner
-import io.gearpump.streaming.StreamApplication
+import io.gearpump.streaming.{Processor, StreamApplication}
 import io.gearpump.streaming.kafka.{KafkaSink, KafkaSource, KafkaStorageFactory}
 import io.gearpump.streaming.sink.DataSinkProcessor
 import io.gearpump.streaming.source.DataSourceProcessor
@@ -63,8 +63,9 @@ object KafkaReadWrite extends AkkaApp with ArgumentsParser {
     val offsetStorageFactory = new KafkaStorageFactory(zookeeperConnect, brokerList)
     val source = new KafkaSource(sourceTopic, zookeeperConnect, offsetStorageFactory)
     val sourceProcessor = DataSourceProcessor(source, sourceNum)
-    val sink = new KafkaSink(sinkTopic, brokerList)
-    val sinkProcessor = DataSinkProcessor(sink, sinkNum)
+    // val sink = new KafkaSink(sinkTopic, brokerList)
+    // val sinkProcessor = DataSinkProcessor(sink, sinkNum)
+    val sinkProcessor = Processor[SOLStreamProcessor](sinkNum)
     val partitioner = new ShufflePartitioner
     val computation = sourceProcessor ~ partitioner ~> sinkProcessor
     val app = StreamApplication("KafkaReadWrite", Graph(computation), appConfig)

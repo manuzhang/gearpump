@@ -21,6 +21,9 @@ package io.gearpump.streaming.kafka
 import scala.util.{Failure, Success}
 
 import com.twitter.bijection.Injection
+import io.gearpump.streaming.kafka.lib.KafkaSourceConfig
+import io.gearpump.streaming.kafka.lib.consumer.KafkaMessage
+import io.gearpump.streaming.transaction.api.{TimeStampFilter, MessageDecoder, OffsetStorage}
 import kafka.common.TopicAndPartition
 import org.mockito.Matchers._
 import org.mockito.Mockito._
@@ -120,43 +123,42 @@ class KafkaSourceSpec extends PropSpec with PropertyChecks with Matchers with Mo
       key = None
       msg <- Gen.alphaStr.map(Injection[String, Array[Byte]])
     } yield KafkaMessage(TopicAndPartition(topic, partition), offset, key, msg)
-    val kafkaMsgListGen = Gen.listOf[KafkaMessage](kafkaMsgGen) suchThat (_.size > 0)
-    forAll(numberGen, kafkaMsgListGen) {
-      (number: Int, kafkaMsgList: List[KafkaMessage]) =>
+    val msgQueueGen = Gen.containerOf[Array, KafkaMessage](kafkaMsgGen)
+    forAll(msgQueueGen) {
+      (msgQueue: Array[KafkaMessage]) =>
         val offsetManager = mock[KafkaOffsetManager]
         val fetchThread = mock[FetchThread]
         val messageDecoder = mock[MessageDecoder]
-        val message = mock[Message]
 
         val timestampFilter = mock[TimeStampFilter]
         val offsetStorageFactory = mock[OffsetStorageFactory]
         val kafkaConfig = mock[KafkaSourceConfig]
-        val offsetManagers = kafkaMsgList.map(_.topicAndPartition -> offsetManager).toMap
+        val offsetManagers = msgQueue.map(_.topicAndPartition -> offsetManager).toMap
 
         val source = new KafkaSource(kafkaConfig, offsetStorageFactory, messageDecoder,
           timestampFilter, Some(fetchThread), offsetManagers)
 
-        if (number == 0) {
-          verify(fetchThread, never()).poll
-          source.read(number).size shouldBe 0
-        } else {
-          kafkaMsgList match {
-            case Nil =>
-              if (number == 1) {
-                when(fetchThread.poll).thenReturn(None)
-              } else {
-                val nones = List.fill(number)(None)
-                when(fetchThread.poll).thenReturn(nones.head, nones.tail: _*)
-              }
-            case list =>
-              val queue = list.map(Option(_)) ++ List.fill(number - list.size)(None)
-              when(fetchThread.poll).thenReturn(queue.head, queue.tail: _*)
-              when(messageDecoder.fromBytes(anyObject[Array[Byte]])).thenReturn(message)
-              when(offsetManager.filter(anyObject[(Message, Long)])).thenReturn(Some(message))
-              when(timestampFilter.filter(anyObject[Message], anyLong())).thenReturn(Some(message))
+        if (msgQueue.isEmpty) {
+          when(fetchThread.poll).thenReturn(None)
+          source.advance() shouldBe false
+
+          intercept[NoSuchElementException] {
+            source.read()
           }
-          source.read(number).size shouldBe Math.min(number, kafkaMsgList.size)
-          verify(fetchThread, times(number)).poll
+
+        } else {
+          msgQueue.indices.foreach { i =>
+            val message = Message(msgQueue(i).msg)
+            when(fetchThread.poll).thenReturn(Option(msgQueue(i)))
+            when(messageDecoder.fromBytes(anyObject[Array[Byte]])).thenReturn(message)
+            when(offsetManager.filter(anyObject[(Message, Long)])).thenReturn(Some(message))
+            when(timestampFilter.filter(anyObject[Message], anyLong())).thenReturn(Some(message))
+
+            source.advance() shouldBe true
+            source.read shouldBe message
+            // multiple reads without advance should return the same record
+            source.read shouldBe message
+          }
         }
         source.close()
     }

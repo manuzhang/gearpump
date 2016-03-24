@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -56,6 +56,7 @@ object KafkaSource {
  *
  * @param config kafka source config
  * @param messageDecoder decodes [[io.gearpump.Message]] from raw bytes
+ * @param offsetStorageFactory factory to build [[OffsetStorage]]
  * @param timestampFilter filters out message based on timestamp
  * @param fetchThread fetches messages and puts on a in-memory queue
  * @param offsetManagers manages offset-to-timestamp storage for each kafka.common.TopicAndPartition
@@ -152,7 +153,7 @@ class KafkaSource(
     }
   }
 
-  override def open(context: TaskContext, startTime: Option[TimeStamp]): Unit = {
+  override def open(context: TaskContext, startTime: TimeStamp): Unit = {
     import context.{appId, appName, parallelism, taskId}
 
     val topics = config.getConsumerTopics
@@ -168,22 +169,14 @@ class KafkaSource(
       tp -> new KafkaOffsetManager(storage)
     }.toMap
 
-    setStartTime(startTime)
+    setStartTime(Option(startTime))
   }
 
-  override def read(batchSize: Int): List[Message] = {
-    val messageBuffer = ArrayBuffer.empty[Message]
-
-    fetchThread.foreach {
-      fetch =>
-        var count = 0
-        while (count < batchSize) {
-          fetch.poll.flatMap(filterMessage).foreach(messageBuffer += _)
-          count += 1
-        }
-    }
-    messageBuffer.toList
+  override def read(): Message = {
+    fetchThread.flatMap(_.poll.map( kafkaMsg =>
+      messageDecoder.fromBytes(kafkaMsg.msg))).orNull
   }
+
 
   private def filterMessage(kafkaMsg: KafkaMessage): Option[Message] = {
     val msgOpt = offsetManagers(kafkaMsg.topicAndPartition)
